@@ -2,6 +2,10 @@
 <a href="https://interpret.ml/gam-changer/"><img src='https://i.imgur.com/njlqCrQ.png' width='100%'></a>
 </h1>
 
+This repository is a fork of the original https://github.com/interpretml/gam-changer.
+
+The original project is currently unmaintained. I have created this fork to implement bug fixes and maintain stability with the current/upcoming versions of InterpretML EBM.
+
 Interactive visualization tool to help domain experts and data scientists easily and responsibly edit Generalized Additive Models (GAMs).
 
 <!-- [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/interpretml/gam-changer/master?urlpath=lab/tree/examples/gam_changer_adult.ipynb) -->
