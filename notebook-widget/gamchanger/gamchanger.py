@@ -266,7 +266,7 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
                 ebm.standard_deviations_[i], ROUND
             ).tolist()[1:-1]
             cur_feature["id"] = [cur_id]
-            cur_feature["count"] = ebm.bin_weights_[cur_id].tolist()[1:-1]
+            cur_feature["count"] = ebm.bin_weights_[i].tolist()[1:-1]
 
             # Track the global score range
             score_range[0] = float(
