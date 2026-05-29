@@ -521,9 +521,7 @@ def get_sample_data(
     return sample_data
 
 
-def _overwrite_bin_definition(
-    ebm: "ExplainableBoostingClassifier", index_id, new_bins, new_scores
-):
+def _overwrite_bin_definition(ebm, feature_index, term_index, new_bins, new_scores):
     """
     Overwrite the bin definitions and scores for continuous variables.
 
@@ -563,27 +561,27 @@ def _overwrite_bin_definition(
     # Check if GAM Changer has changed the bin definition
     binDefChanged = False
 
-    if len(new_bins) - 1 != len(ebm.bins_[index_id][0]):
+    if len(new_bins) - 1 != len(ebm.bins_[feature_index][0]):
         binDefChanged = True
 
     else:
         for i in range(1, len(new_bins)):
-            if new_bins[i] != round(ebm.bins_[index_id][0][i - 1], ROUND):
+            if new_bins[i] != round(ebm.bins_[feature_index][0][i - 1], ROUND):
                 binDefChanged = True
                 break
 
     # Update the SDs
     if binDefChanged:
-        ebm.standard_deviations_[index_id] = np.zeros(len(new_scores) + 1)
+        ebm.standard_deviations_[term_index] = np.zeros(len(new_scores) + 2)
     else:
         # Iterate through the scores to zero out SDs of modified bins
-        for i in range(1, len(ebm.term_scores_[index_id]) - 1):
-            if round(ebm.term_scores_[index_id][i], ROUND) != new_scores[i - 1]:
-                ebm.standard_deviations_[index_id][i] = 0
+        for i in range(1, len(ebm.term_scores_[term_index]) - 1):
+            if round(ebm.term_scores_[term_index][i], ROUND) != new_scores[i - 1]:
+                ebm.standard_deviations_[term_index][i] = 0
 
     # Overwrite the scores
-    ebm.term_scores_[index_id] = np.array(
-        [ebm.term_scores_[index_id][0]] + new_scores + [ebm.term_scores_[index_id][-1]]
+    ebm.term_scores_[term_index] = np.array(
+        [ebm.term_scores_[term_index][0]] + new_scores + [ebm.term_scores_[term_index][-1]]
     ).astype(np.float64)
 
     # Overwrite the bin edges
@@ -591,8 +589,8 @@ def _overwrite_bin_definition(
     # GAM Changer won't change the edge for col_min_, because it
     # will always be one of the end points in any interpolations
     # So we don't really need to change col_min_, change here for testing purpose
-    ebm.feature_bounds_[index_id][0] = new_bins[0]
-    ebm.bins_[index_id][0] = np.array(new_bins[1:]).astype(np.float64)
+    ebm.feature_bounds_[feature_index][0] = new_bins[0]
+    ebm.bins_[feature_index][0] = np.array(new_bins[1:]).astype(np.float64)
 
 
 def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export):
@@ -635,7 +633,11 @@ def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export):
             continue
 
         cur_name = cur_history["featureName"]
-        cur_index = ebm_copy.feature_names_in_.index(cur_name)
+        cur_feature_index = list(ebm_copy.feature_names_in_).index(cur_name)
+        cur_term_index = next(
+                                i for i, term in enumerate(ebm_copy.term_features_)
+                                if len(term) == 1 and term[0] == cur_feature_index
+                            )
 
         # If we have already updated EBM on this feature, skip earlier edits
         if cur_name in updated_features:
@@ -662,12 +664,12 @@ def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export):
             assert len(bin_edges) == len(bin_data)
 
             # Overwrite EBM bin definitions/additive terms with bin_edges and bin_scores
-            _overwrite_bin_definition(ebm_copy, cur_index, bin_edges, bin_scores)
+            _overwrite_bin_definition(ebm_copy, cur_feature_index, cur_term_index, bin_edges, bin_scores)
             updated_features.add(cur_name)
 
         elif feature_name_to_type[cur_name] == "nominal":
             # Get the current level mapping
-            cur_mapping = ebm_col_mapping[cur_index][0]
+            cur_mapping = ebm_col_mapping[cur_feature_index][0]
 
             # Collect bin edges and scores
             bin_data = cur_history["state"]["pointData"]
@@ -686,10 +688,10 @@ def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export):
                 cur_bin_index = cur_mapping[edge]
 
                 if (
-                    round(ebm_copy.term_scores_[cur_index][cur_bin_index], ROUND)
+                    round(ebm_copy.term_scores_[cur_term_index][cur_bin_index], ROUND)
                     != cur_score
                 ):
-                    ebm_copy.term_scores_[cur_index][cur_bin_index] = cur_score
+                    ebm_copy.term_scores_[cur_term_index][cur_bin_index] = cur_score
 
             updated_features.add(cur_name)
 
