@@ -154,6 +154,9 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
     # Track the encoding of categorical feature levels
     labelEncoder = {}
 
+    main_features = []
+    interaction_features = []
+
     # Track the score range
     score_range = [np.inf, -np.inf]
 
@@ -163,6 +166,8 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
 
         # Handle interaction term differently from cont/cat
         if len(term) == 2:
+            interaction_features.append(term[0])
+            interaction_features.append(term[1])
             cur_feature["type"] = "interaction"
 
             cur_id = term
@@ -232,13 +237,26 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
                 _get_hist_counts(ebm, cur_id[1]), ROUND
             ).tolist()
 
-            
+            score_range[0] = float(
+                min(
+                    score_range[0],
+                    np.min(ebm.term_scores_[i] - ebm.standard_deviations_[i]),
+                )
+            )
+            score_range[1] = float(
+                max(
+                    score_range[1],
+                    np.max(ebm.term_scores_[i] + ebm.standard_deviations_[i]),
+                )
+            )
 
 
-        else:
+        elif len(term) == 1:
             # Main effects here
-            cur_feature["name"] = ebm.feature_names_in_[term[0]]
-            cur_feature["type"] = _get_feature_type(ebm, term[0])
+            cur_id = term[0]
+            main_features.append(cur_id)
+            cur_feature["name"] = ebm.feature_names_in_[cur_id]
+            cur_feature["type"] = _get_feature_type(ebm, cur_id)
 
             # Skip the first item (reserved for missing value)
             cur_feature["additive"] = np.round(ebm.term_scores_[i], ROUND).tolist()[
@@ -247,7 +265,6 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
             cur_feature["error"] = np.round(
                 ebm.standard_deviations_[i], ROUND
             ).tolist()[1:-1]
-            cur_id = term[0]
             cur_feature["id"] = [cur_id]
             cur_feature["count"] = ebm.bin_weights_[cur_id].tolist()[1:-1]
 
@@ -336,6 +353,82 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
 
         features.append(cur_feature)
 
+    #handle excluded features
+    interaction_features = list(set(interaction_features))
+    for cur_id in interaction_features:
+        if cur_id in main_features:
+            continue
+        for i, term in tqdm(enumerate(ebm.term_features_)):
+            if cur_id in term:
+                if term[0] == cur_id:
+                    term_idx = 0
+                    score_len = ebm.term_scores_[i][1:-1, 1:-1].shape[0]
+                else:
+                    term_idx = 1
+                    score_len = ebm.term_scores_[i][1:-1, 1:-1].shape[1]
+                break
+
+        cur_feature = {}
+        cur_feature["importance"] = 0.0
+        cur_feature["name"] = ebm.feature_names_in_[cur_id]
+        cur_feature["type"] = _get_feature_type(ebm, cur_id)
+        cur_feature["id"] = [cur_id]
+        if cur_feature["type"] == "continuous":
+            # Add the bin information
+            cur_feature["binEdge"] = _get_pair_bin_labels(ebm, cur_id)
+
+            # Add the hist information
+            cur_feature["histEdge"] = np.round(
+                _get_hist_edges(ebm, cur_id), ROUND
+            ).tolist()
+            cur_feature["histCount"] = np.round(
+                _get_hist_counts(ebm, cur_id), ROUND
+            ).tolist()
+
+        elif cur_feature["type"] == "categorical":
+            # Get the level value mapping
+            level_str_to_int = ebm.bins_[cur_id][0]
+
+            cur_feature["binLabel"] = list(
+                map(
+                    lambda x: level_str_to_int[x],
+                    _get_main_bin_labels(ebm, cur_id),
+                )
+            )
+
+            # Add the hist information
+            # For categorical data, the edges are strings
+            cur_feature["histEdge"] = list(
+                map(
+                    lambda x: level_str_to_int[x],
+                    _get_hist_edges(ebm, cur_id),
+                )
+            )
+
+            cur_feature["histCount"] = np.round(
+                _get_hist_counts(ebm, cur_id), ROUND
+            ).tolist()
+
+            # Add the label encoding information
+            labelEncoder[cur_feature["name"]] = {
+                str(i): s for s, i in level_str_to_int.items()
+            }
+        
+        cur_feature["additive"] = [0.0] * score_len
+        cur_feature["error"] = [0.0] * score_len
+        cur_feature["count"] = [0.0] * score_len
+
+        features.append(cur_feature)
+
+    #sort the features list to have main effects in the original order
+    main_effect_feats = sorted(
+        [f for f in features if len(f["id"]) == 1],
+        key=lambda f: f["id"][0],
+    )
+    interaction_feats = [f for f in features if len(f["id"]) == 2]
+    features = main_effect_feats + interaction_feats
+
+    
     score_range = list(map(lambda x: round(x, 4), score_range))
 
     data = {
