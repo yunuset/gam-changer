@@ -162,7 +162,7 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
         cur_feature["importance"] = float(ebm.term_importances()[i])
 
         # Handle interaction term differently from cont/cat
-        if i >= len(ebm.feature_names_in_):
+        if len(term) == 2:
             cur_feature["type"] = "interaction"
 
             cur_id = term
@@ -232,10 +232,13 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
                 _get_hist_counts(ebm, cur_id[1]), ROUND
             ).tolist()
 
+            
+
+
         else:
             # Main effects here
-            cur_feature["name"] = ebm.feature_names_in_[i]
-            cur_feature["type"] = _get_feature_type(ebm, i)
+            cur_feature["name"] = ebm.feature_names_in_[term[0]]
+            cur_feature["type"] = _get_feature_type(ebm, term[0])
 
             # Skip the first item (reserved for missing value)
             cur_feature["additive"] = np.round(ebm.term_scores_[i], ROUND).tolist()[
@@ -786,3 +789,5 @@ def visualize(
 
     # Display the iframe
     display_html(iframe, raw=True)
+
+
