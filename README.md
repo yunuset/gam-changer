@@ -6,6 +6,11 @@ This repository is a fork of the original https://github.com/interpretml/gam-cha
 
 The original project is currently unmaintained. I have created this fork to implement bug fixes and maintain stability with the current/upcoming versions of InterpretML EBM.
 
+To install this fork:
+```shell
+pip install "git+https://github.com/yunuset/gam-changer.git@master#subdirectory=notebook-widget"
+```
+
 Interactive visualization tool to help domain experts and data scientists easily and responsibly edit Generalized Additive Models (GAMs).
 
 <!-- [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/interpretml/gam-changer/master?urlpath=lab/tree/examples/gam_changer_adult.ipynb) -->
