@@ -8,7 +8,9 @@ The original project is currently unmaintained. I have created this fork to impl
 
 To install this fork:
 ```shell
-pip install "git+https://github.com/yunuset/gam-changer.git@master#subdirectory=notebook-widget"
+git clone https://github.com/yunuset/gam-changer.git
+cd gam-changer/notebook-widget
+pip install .
 ```
 
 Interactive visualization tool to help domain experts and data scientists easily and responsibly edit Generalized Additive Models (GAMs).
