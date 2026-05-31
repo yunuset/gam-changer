@@ -847,6 +847,7 @@ def visualize(
     resort_categorical=False,
     model_data=None,
     sample_data=None,
+    return_html=False
 ):
     """
     Render GAM Changer in the output cell.
@@ -881,7 +882,8 @@ def visualize(
     """.format(
         html_str, iframe_id
     )
-
+    if return_html:
+        return iframe
     # Display the iframe
     display_html(iframe, raw=True)
 
