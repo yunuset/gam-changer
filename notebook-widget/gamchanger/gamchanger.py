@@ -573,6 +573,24 @@ def _overwrite_bin_definition(ebm, feature_index, term_index, new_bins, new_scor
     # Update the SDs
     if binDefChanged:
         ebm.standard_deviations_[term_index] = np.zeros(len(new_scores) + 2)
+
+        # Rebuild bin_weights_ to match the new bin structure by redistributing
+        # histogram counts. bin_weights_ must have the same length as term_scores_.
+        hist_edges = np.array(ebm.histogram_edges_[feature_index])
+        hist_weights = np.array(ebm.histogram_weights_[feature_index])
+        new_cut_points = np.array(new_bins[1:])  # internal cut points only
+
+        new_weights = np.zeros(len(new_scores) + 2)
+        new_weights[0] = ebm.bin_weights_[term_index][0]   # preserve missing-value weight
+        new_weights[-1] = hist_weights[-1]                  # preserve overflow weight
+
+        # Distribute each interior histogram bin into the corresponding new term bin
+        for h in range(1, len(hist_weights) - 1):
+            midpoint = (hist_edges[h - 1] + hist_edges[h]) / 2.0
+            new_bin_idx = int(np.searchsorted(new_cut_points, midpoint, side='right')) + 1
+            new_weights[new_bin_idx] += hist_weights[h]
+
+        ebm.bin_weights_[term_index] = new_weights
     else:
         # Iterate through the scores to zero out SDs of modified bins
         for i in range(1, len(ebm.term_scores_[term_index]) - 1):
