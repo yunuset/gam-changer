@@ -12,6 +12,10 @@ git clone https://github.com/yunuset/gam-changer.git
 cd gam-changer/notebook-widget
 pip install .
 ```
+or
+```shell
+pip install "git+https://github.com/yunuset/gam-changer.git@master#subdirectory=notebook-widget"
+```
 
 Interactive visualization tool to help domain experts and data scientists easily and responsibly edit Generalized Additive Models (GAMs).
 
