@@ -607,6 +607,10 @@ def _overwrite_bin_definition(ebm, feature_index, term_index, new_bins, new_scor
     # GAM Changer won't change the edge for col_min_, because it
     # will always be one of the end points in any interpolations
     # So we don't really need to change col_min_, change here for testing purpose
+    # Preserve original cuts for interaction terms before overwriting main effect bins
+    if len(ebm.bins_[feature_index]) == 1:
+        ebm.bins_[feature_index] = [ebm.bins_[feature_index][0], ebm.bins_[feature_index][0].copy()]
+
     ebm.feature_bounds_[feature_index][0] = new_bins[0]
     ebm.bins_[feature_index][0] = np.array(new_bins[1:]).astype(np.float64)
 
