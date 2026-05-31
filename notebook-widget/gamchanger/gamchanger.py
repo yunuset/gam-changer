@@ -155,7 +155,6 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
     labelEncoder = {}
 
     main_features = []
-    interaction_features = []
 
     # Track the score range
     score_range = [np.inf, -np.inf]
@@ -166,8 +165,6 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
 
         # Handle interaction term differently from cont/cat
         if len(term) == 2:
-            interaction_features.append(term[0])
-            interaction_features.append(term[1])
             cur_feature["type"] = "interaction"
 
             cur_id = term
@@ -354,17 +351,14 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
         features.append(cur_feature)
 
     #handle excluded features
-    interaction_features = list(set(interaction_features))
-    for cur_id in interaction_features:
+    for cur_id in range(len(ebm.feature_names_in_)):
         if cur_id in main_features:
             continue
         for i, term in tqdm(enumerate(ebm.term_features_)):
             if cur_id in term:
                 if term[0] == cur_id:
-                    term_idx = 0
                     score_len = ebm.term_scores_[i][1:-1, 1:-1].shape[0]
                 else:
-                    term_idx = 1
                     score_len = ebm.term_scores_[i][1:-1, 1:-1].shape[1]
                 break
 
