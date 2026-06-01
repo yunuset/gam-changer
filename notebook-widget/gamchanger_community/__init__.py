@@ -2,6 +2,6 @@
 
 __author__ = """Jay Wang"""
 __email__ = "jayw@zijie.wang"
-__version__ = "0.1.13"
+__version__ = "0.2.0"
 
-from gamchanger.gamchanger import *
+from gamchanger_community.gamchanger import *
