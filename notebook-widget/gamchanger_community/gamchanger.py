@@ -19,6 +19,22 @@ if TYPE_CHECKING:
 
 ROUND = 4
 
+def _enforce_strict_monotonicity(edges, min_dist=1e-5):
+    """
+    Ensures that every edge is strictly greater than the previous one 
+    by at least min_dist to prevent Float32 WebAssembly collisions.
+    """
+    if not edges:
+        return edges
+        
+    new_edges = [float(edges[0])]
+    for i in range(1, len(edges)):
+        # The next edge must be at least min_dist larger than the previous one
+        next_val = max(float(edges[i]), new_edges[-1] + min_dist)
+        new_edges.append(next_val)
+        
+    return new_edges
+
 
 def _resort_categorical_level(col_mapping):
     """
@@ -263,7 +279,10 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
                 ebm.standard_deviations_[i], ROUND
             ).tolist()[1:-1]
             cur_feature["id"] = [cur_id]
-            cur_feature["count"] = ebm.bin_weights_[i].tolist()[1:-1]
+            # Prevent zero-weights from causing NaN division crashes in the frontend
+            counts = np.array(ebm.bin_weights_[i].tolist()[1:-1])
+            counts = np.maximum(counts, 1e-9)
+            cur_feature["count"] = counts.tolist()
 
             # Track the global score range
             score_range[0] = float(
@@ -282,7 +301,8 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
             # Add the binning information for continuous features
             if cur_feature["type"] == "continuous":
                 # Add the bin information
-                cur_feature["binEdge"] = _get_main_bin_labels(ebm, cur_id)
+                raw_bin_edges = _get_main_bin_labels(ebm, cur_id)
+                cur_feature["binEdge"] = _enforce_strict_monotonicity(raw_bin_edges)
 
                 # Add the hist information
                 cur_feature["histEdge"] = np.round(
@@ -369,7 +389,8 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
         cur_feature["id"] = [cur_id]
         if cur_feature["type"] == "continuous":
             # Add the bin information
-            cur_feature["binEdge"] = _get_pair_bin_labels(ebm, cur_id)
+            raw_bin_edges = _get_pair_bin_labels(ebm, cur_id)
+            cur_feature["binEdge"] = _enforce_strict_monotonicity(raw_bin_edges)
 
             # Add the hist information
             cur_feature["histEdge"] = np.round(
@@ -410,7 +431,7 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
         
         cur_feature["additive"] = [0.0] * score_len
         cur_feature["error"] = [0.0] * score_len
-        cur_feature["count"] = [0.0] * score_len
+        cur_feature["count"] = [1e-9] * score_len
 
         features.append(cur_feature)
 
@@ -609,7 +630,7 @@ def _overwrite_bin_definition(ebm, feature_index, term_index, new_bins, new_scor
     ebm.bins_[feature_index][0] = np.array(new_bins[1:]).astype(np.float64)
 
 
-def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export):
+def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export, recenter=False):
     """
     Return a copy of ebm that is modified based on the edits from GAM Changer.
 
@@ -617,7 +638,7 @@ def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export):
         ebm: EBM object
         gamchanger_export: Python dictionary: loaded from the GAM Changer
             export (*.gamchanger)
-
+        recenter: Center the scores back to 0.0 and shift the intercept accordingly
     Returns:
         An edited deep copy of ebm object.
     """
@@ -717,6 +738,39 @@ def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export):
                     feature_name_to_type[cur_name]
                 )
             )
+
+    if recenter:
+        # ── Center each main-effect term so its weighted-mean score is 0, ──────────
+        # ── and absorb the shift into the intercept. ────────────────────────────────
+        intercept_shift = 0.0
+
+        for term_index, term in enumerate(ebm_copy.term_features_):
+            if len(term) != 1:          # skip interaction terms
+                continue
+
+            # Interior slots only — index 0 is reserved for missing values,
+            # index -1 is the overflow/unknown bin.
+            scores  = ebm_copy.term_scores_[term_index][1:-1]
+            weights = ebm_copy.bin_weights_[term_index][1:-1]
+
+            total_weight = weights.sum()
+            if total_weight == 0:
+                continue                # nothing to center
+
+            weighted_mean = float(np.dot(scores, weights) / total_weight)
+
+            # Shift the interior scores in-place
+            ebm_copy.term_scores_[term_index][1:-1] -= weighted_mean
+
+            # Accumulate how much we're removing so the intercept can compensate
+            intercept_shift += weighted_mean
+
+        # Apply the accumulated shift to the intercept
+        if hasattr(ebm_copy, "classes_"):           # classifier: intercept_ is an array
+            ebm_copy.intercept_[0] += intercept_shift
+        else:                                        # regressor: intercept_ is a scalar
+            ebm_copy.intercept_ += intercept_shift
+        # ────────────────────────────────────────────────────────────────────────────
 
     return ebm_copy
 
@@ -878,6 +932,7 @@ def visualize(
         sample_data: Pre-generated sample data in a dictionary
         resort_categorical: Whether to sort the levels in categorical variable
             by increasing order if all levels can be converted to numbers.
+        return_html: Return the html string instead of displaying.
     """
     if model_data is None and sample_data is None:
         html_str = _make_html(ebm, x_test, y_test, resort_categorical)
