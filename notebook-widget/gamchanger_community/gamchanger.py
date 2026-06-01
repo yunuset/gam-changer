@@ -176,11 +176,12 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
     score_range = [np.inf, -np.inf]
 
     for i, term in tqdm(enumerate(ebm.term_features_)):
-        cur_feature = {}
-        cur_feature["importance"] = float(ebm.term_importances()[i])
-
+        if len(term) > 2:
+            continue
         # Handle interaction term differently from cont/cat
         if len(term) == 2:
+            cur_feature = {}
+            cur_feature["importance"] = float(ebm.term_importances()[i])
             cur_feature["type"] = "interaction"
 
             cur_id = term
@@ -266,6 +267,8 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
 
         elif len(term) == 1:
             # Main effects here
+            cur_feature = {}
+            cur_feature["importance"] = float(ebm.term_importances()[i])
             cur_id = term[0]
             main_features.append(cur_id)
             cur_feature["name"] = ebm.feature_names_in_[cur_id]
@@ -374,14 +377,23 @@ def get_model_data(ebm: "ExplainableBoostingClassifier", resort_categorical=Fals
     for cur_id in range(len(ebm.feature_names_in_)):
         if cur_id in main_features:
             continue
+        
+        found = False
         for i, term in tqdm(enumerate(ebm.term_features_)):
             if cur_id in term:
+                if len(term)!=2:
+                    continue
                 if term[0] == cur_id:
                     score_len = ebm.term_scores_[i][1:-1, 1:-1].shape[0]
-                else:
+                    found = True
+                    break
+                elif term[1] == cur_id:
                     score_len = ebm.term_scores_[i][1:-1, 1:-1].shape[1]
-                break
-
+                    found = True
+                    break
+        #skip if a feature is not included in an interaction pair
+        if not found:
+            continue
         cur_feature = {}
         cur_feature["importance"] = 0.0
         cur_feature["name"] = ebm.feature_names_in_[cur_id]
