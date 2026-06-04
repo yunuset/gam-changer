@@ -683,11 +683,21 @@ def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export, re
 
         cur_name = cur_history["featureName"]
         cur_feature_index = list(ebm_copy.feature_names_in_).index(cur_name)
+        # Wrap the generator in parentheses and add None as the default
         cur_term_index = next(
-                                i for i, term in enumerate(ebm_copy.term_features_)
-                                if len(term) == 1 and term[0] == cur_feature_index
-                            )
+            (
+                i for i, term in enumerate(ebm_copy.term_features_)
+                if len(term) == 1 and term[0] == cur_feature_index
+            ),
+            None
+        )
 
+        # If the feature is excluded in the EBM, it won't have a main effect term.
+        # Skip applying the edit for this feature.
+        if cur_term_index is None:
+            updated_features.add(cur_name) # Mark as handled so we don't process older edits
+            continue
+        
         # If we have already updated EBM on this feature, skip earlier edits
         if cur_name in updated_features:
             continue
