@@ -650,7 +650,7 @@ def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export, re
         ebm: EBM object
         gamchanger_export: Python dictionary: loaded from the GAM Changer
             export (*.gamchanger)
-        recenter: Center the scores back to 0.0 and shift the intercept accordingly
+        recenter: Center the scores back to 0.0 to not add any bias per term
     Returns:
         An edited deep copy of ebm object.
     """
@@ -763,8 +763,6 @@ def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export, re
 
     if recenter:
         # ── Center each main-effect term so its weighted-mean score is 0, ──────────
-        # ── and absorb the shift into the intercept. ────────────────────────────────
-        intercept_shift = 0.0
 
         for term_index, term in enumerate(ebm_copy.term_features_):
             if len(term) != 1:          # skip interaction terms
@@ -784,15 +782,7 @@ def get_edited_model(ebm: "ExplainableBoostingClassifier", gamchanger_export, re
             # Shift the interior scores in-place
             ebm_copy.term_scores_[term_index][1:-1] -= weighted_mean
 
-            # Accumulate how much we're removing so the intercept can compensate
-            intercept_shift += weighted_mean
-
-        # Apply the accumulated shift to the intercept
-        if hasattr(ebm_copy, "classes_"):           # classifier: intercept_ is an array
-            ebm_copy.intercept_[0] += intercept_shift
-        else:                                        # regressor: intercept_ is a scalar
-            ebm_copy.intercept_ += intercept_shift
-        # ────────────────────────────────────────────────────────────────────────────
+        # WE DON'T APPLY ANY INTERCEPT SHIFT SO THAT THE GAMCHANGER EDIT WON'T ADD ANY BIAS
 
     return ebm_copy
 
